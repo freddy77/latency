@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <stdbool.h>
 #include <arpa/inet.h>
@@ -10,7 +11,6 @@
 #include "latency.h"
 #include "utils.h"
 
-static bool wait_input(int fd, int timeout);
 static inline uint64_t get_time_us(void);
 
 static unsigned curr_connection_id;
@@ -30,106 +30,110 @@ bytes2time(int64_t bytes)
 	return bytes * 1000000u / rate_bytes;
 }
 
-static bool
-wait_input(int fd, int timeout)
-{
-	struct pollfd pollfd = { fd, POLLIN, 0 };
-	switch (poll(&pollfd, 1, timeout)) {
-	case -1:
-		perror("poll");
-		exit(EXIT_FAILURE);
-	case 0:
-		/* timeout */
-		return false;
-	}
-	DEBUG("got data\n");
-	return true;
-}
-
-static ssize_t
-read_all(int fd, void *buf, size_t buf_size)
-{
-	unsigned char *p = (unsigned char *) buf;
-	ssize_t readed = 0;
-	for (;;) {
-		if (!wait_input(fd, 0) && readed)
-			break;
-
-		ssize_t len = recv(fd, p, buf_size, 0);
-		if (len == 0)
-			break;
-		if (len < 0) {
-			if (readed)
-				break;
-			return len;
-		}
-		readed += len;
-		buf_size -= len;
-		p += len;
-	}
-	return readed;
-}
-
 static void
 forward_data(int from, int to)
 {
-	const size_t buf_size = 1024 * 1024;
-	void *buf = malloc(buf_size);
+	const size_t max_buf_size = 1024 * 1024;
+	void *buf = malloc(max_buf_size);
+	size_t buf_size = 0;
+
+	typedef struct {
+		uint64_t received_at;
+		unsigned size;
+	} chunk;
+
+	const unsigned max_chunks = 128;
+	chunk chunks[max_chunks];
 
 	uint64_t curr_time;
-	uint64_t last_first_read = 0;
 	uint64_t bytes_from_first_read = 0;
 
+	struct pollfd pollfds[1] = {
+		{ -1, POLLIN, 0 },
+	};
+
+	chunk *curr_chunk = &chunks[0];
+	curr_chunk->received_at = 0;
+	curr_chunk->size = 0;
+
 	for (;;) {
-		/* compute time we receive first data */
-		wait_input(from, -1);
-		uint64_t new_first_read = get_time_us();
-		if (!last_first_read) {
-			/* new start point */
-			last_first_read = new_first_read;
-			bytes_from_first_read = 0;
-		} else {
-			assert(new_first_read > last_first_read);
-			// XXX constant for time, consider possible latency from read
-			// compute how much bytes we should have send in this time
-			if (last_first_read + latency_us + bytes2time(bytes_from_first_read) + 2000u < new_first_read) {
-				DEBUG("updated\n");
-				last_first_read = new_first_read;
-				bytes_from_first_read = 0;
-			} else {
-				DEBUG("not updated\n");
-				while (new_first_read >= last_first_read + 1000000u && bytes_from_first_read >= rate_bytes) {
-					last_first_read += 1000000u;
-					bytes_from_first_read -= rate_bytes;
-				}
-			}
+		/* wait for some events */
+		int timeout = -1;
+		bool got_timeout = false;
+		pollfds[0].fd = buf_size < max_buf_size && curr_chunk - chunks < max_chunks - 1 ? from : -1;
+
+		if (buf_size) {
+			/* compute time to wait first time */
+			uint64_t to_wait = chunks[0].received_at + latency_us + bytes2time(bytes_from_first_read);
+			curr_time = get_time_us();
+			if (to_wait > curr_time)
+				timeout = (to_wait - curr_time) / 1000u;
+			timeout = MAX(timeout, 1);
 		}
 
-		/* read as much data as available */
-		/* here the buffer is empty so we must consider first time we have data */
-		ssize_t readed = read_all(from, buf, buf_size);
-		if (readed <= 0)
+		switch (poll(pollfds, 1, timeout)) {
+		case -1:
+			perror("poll");
 			exit(EXIT_FAILURE);
+		case 0:
+			got_timeout = true;
+			break;
+		}
 
-		/* compute time to wait first time */
-		uint64_t to_wait = latency_us + bytes2time(bytes_from_first_read);
-		curr_time = get_time_us();
-		if (to_wait > curr_time && to_wait - curr_time > 1000)
-			usleep(to_wait - curr_time);
-		size_t written = 0;
-		for (;;) {
-			// compute bytes we can read
-			curr_time = get_time_us();
-			int64_t bytes = time2bytes(curr_time - last_first_read - latency_us) - bytes_from_first_read;
-			if (bytes > 0) {
-				bytes = MIN(bytes, readed - written);
-				write_all(to, buf + written, bytes);
-				written += bytes;
-				bytes_from_first_read += bytes;
-				if (written >= readed)
-					break;
+		if (pollfds[0].fd >= 0 && pollfds[0].revents) {
+			/* compute time we receive first data */
+			uint64_t new_first_read = get_time_us();
+			if (!curr_chunk->size) {
+				/* new start point */
+				assert(curr_chunk == &chunks[0]);
+				curr_chunk->received_at = new_first_read;
+				bytes_from_first_read = 0;
+			} else {
+				assert(new_first_read > curr_chunk->received_at);
+				// XXX constant for time, consider possible latency from read
+				// compute how much bytes we should have send in this time
+				if (curr_chunk->received_at + latency_us + bytes2time(curr_chunk == chunks ? bytes_from_first_read : curr_chunk->size) + 2000u < new_first_read) {
+					DEBUG("updated\n");
+					++curr_chunk;
+					curr_chunk->received_at = new_first_read;
+					curr_chunk->size = 0;
+				} else {
+					/* reduce values avoiding possible overflows */
+					while (new_first_read >= chunks[0].received_at + 1000000u && bytes_from_first_read >= rate_bytes) {
+						chunks[0].received_at += 1000000u;
+						bytes_from_first_read -= rate_bytes;
+					}
+				}
 			}
-			usleep(1000);
+
+			assert(buf_size >= 0 && buf_size < max_buf_size);
+			ssize_t len = recv(from, buf + buf_size, max_buf_size - buf_size, 0);
+			if (len <= 0)
+				exit(EXIT_FAILURE);
+			buf_size += len;
+			curr_chunk->size += len;
+			assert(buf_size > 0 && buf_size <= max_buf_size);
+		}
+
+		if (got_timeout) {
+			// compute bytes we can write
+			curr_time = get_time_us();
+			int64_t bytes = time2bytes(curr_time - chunks[0].received_at - latency_us) - bytes_from_first_read;
+			if (bytes > 0) {
+				assert(chunks[0].size > 0);
+				bytes = MIN(bytes, chunks[0].size);
+				write_all(to, buf, bytes);
+				buf_size -= bytes;
+				memmove(buf, buf + bytes, buf_size);
+				chunks[0].size -= bytes;
+				bytes_from_first_read += bytes;
+				/* go to next chunk */
+				if (chunks[0].size == 0 && curr_chunk != chunks) {
+					memmove(&chunks[0], &chunks[1], (char*) curr_chunk - (char*) &chunks[0]);
+					--curr_chunk;
+					bytes_from_first_read = 0;
+				}
+			}
 		}
 	}
 	free(buf);
