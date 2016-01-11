@@ -124,6 +124,7 @@ main(int argc, char **argv)
 
 	setup_signals();
 
+	unsigned connection_id = 0;
 	while (!term) {
 		int fd = accept(sock, NULL, NULL);
 		if (fd == -1) {
@@ -145,7 +146,7 @@ main(int argc, char **argv)
 			close(sock);
 			signal(SIGTERM, SIG_DFL);
 			signal(SIGINT, SIG_DFL);
-			handle_client(fd);
+			handle_client(fd, ++connection_id);
 			exit(EXIT_SUCCESS);
 			break;
 		default:
