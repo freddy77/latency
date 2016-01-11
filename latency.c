@@ -60,9 +60,9 @@ usage(void)
 }
 
 static const unit latency_units[] = {
-	{ "ms", 1 },
-	{ "s", 1000 },
-	{ "", 1 },
+	{ "ms", 1000 },
+	{ "s", 1000000 },
+	{ "", 1000 },
 	{ NULL, 0 }
 };
 
@@ -88,16 +88,13 @@ main(int argc, char **argv)
 
 	int listen_port = atoi(argv[1]);
 	connect_port = atoi(argv[2]);
-	int latency = parse_value(argv[3], 0, 10000, latency_units);
+	latency_us = parse_value(argv[3], 0, 10000000, latency_units);
 	rate_bytes = parse_value(argv[4], 1, INT_MAX, rate_units);
 
 	if (listen_port <= 0 || connect_port <= 0
 	    || listen_port > 0xffff || connect_port > 0xffff
-	    || listen_port == connect_port
-	    || latency <= 0)
+	    || listen_port == connect_port)
 		usage();
-
-	latency_us = latency * 1000u;
 
 	int sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock == -1) {
