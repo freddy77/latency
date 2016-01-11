@@ -111,7 +111,7 @@ main(int argc, char **argv)
 	struct sockaddr_in sin;
 	sin.sin_family = AF_INET;
 	sin.sin_port = htons(listen_port);
-	sin.sin_addr.s_addr = inet_addr("127.0.0.1");
+	sin.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 	if (bind(sock, (struct sockaddr*) &sin, sizeof(sin)) < 0) {
 		perror("bind");
 		exit(EXIT_FAILURE);
