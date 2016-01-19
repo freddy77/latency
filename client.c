@@ -52,6 +52,8 @@ forward_data(int from, int to)
 		{ -1, POLLIN, 0 },
 	};
 
+	bool connected = true;
+
 	chunk *curr_chunk = &chunks[0];
 	curr_chunk->received_at = 0;
 	curr_chunk->size = 0;
@@ -60,7 +62,9 @@ forward_data(int from, int to)
 		/* wait for some events */
 		int timeout = -1;
 		bool got_timeout = false;
-		pollfds[0].fd = buf_size < max_buf_size && curr_chunk - chunks < max_chunks - 1 ? from : -1;
+		pollfds[0].fd = -1;
+		if (buf_size < max_buf_size && curr_chunk - chunks < max_chunks - 1 && connected)
+			pollfds[0].fd = from;
 
 		if (buf_size) {
 			/* compute time to wait first time */
@@ -80,7 +84,7 @@ forward_data(int from, int to)
 			break;
 		}
 
-		if (pollfds[0].fd >= 0 && pollfds[0].revents) {
+		if (connected && pollfds[0].fd >= 0 && pollfds[0].revents) {
 			/* compute time we receive first data */
 			uint64_t new_first_read = get_time_us();
 			if (!curr_chunk->size) {
@@ -108,6 +112,14 @@ forward_data(int from, int to)
 
 			assert(buf_size >= 0 && buf_size < max_buf_size);
 			ssize_t len = recv(from, buf + buf_size, max_buf_size - buf_size, 0);
+			// on connection closed we need to continue to send data and close
+			// when all data has been sent!
+			if (len == 0) {
+				if (buf_size == 0)
+					break;
+				connected = false;
+				continue;
+			}
 			if (len <= 0)
 				exit(EXIT_FAILURE);
 			buf_size += len;
@@ -124,6 +136,8 @@ forward_data(int from, int to)
 				bytes = MIN(bytes, chunks[0].size);
 				write_all(to, buf, bytes);
 				buf_size -= bytes;
+				if (buf_size == 0 && !connected)
+					break;
 				memmove(buf, buf + bytes, buf_size);
 				chunks[0].size -= bytes;
 				bytes_from_first_read += bytes;
@@ -136,6 +150,7 @@ forward_data(int from, int to)
 			}
 		}
 	}
+	shutdown(to, SHUT_WR);
 	free(buf);
 }
 
@@ -180,4 +195,5 @@ void handle_client(int fd, unsigned connection_id)
 		exit(EXIT_FAILURE);
 	}
 	forward_data(sock, fd);
+	pthread_join(th, NULL);
 }
