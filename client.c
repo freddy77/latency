@@ -18,16 +18,18 @@ static __thread char direction = '>';
 
 #define DEBUG(fmt, ...) printf("%u%c: " fmt, curr_connection_id, direction, ## __VA_ARGS__)
 
+static double time2bytes_ratio, bytes2time_ratio;
+
 static inline int64_t
 time2bytes(int64_t time_us)
 {
-	return time_us * rate_bytes / 1000000u;
+	return time_us * time2bytes_ratio;
 }
 
 static inline int64_t
 bytes2time(int64_t bytes)
 {
-	return bytes * 1000000u / rate_bytes;
+	return bytes * bytes2time_ratio;
 }
 
 static void
@@ -165,6 +167,9 @@ forward_thread(void *arg)
 
 void handle_client(int fd, unsigned connection_id)
 {
+	time2bytes_ratio = (double) rate_bytes / 1000000.0;
+	bytes2time_ratio = (double) 1000000.0 / rate_bytes;
+
 	curr_connection_id = connection_id;
 
 	set_nodelay(fd);
