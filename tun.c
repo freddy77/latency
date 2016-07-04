@@ -220,6 +220,10 @@ handle_tun(int fd)
 
 	pthread_create(&writer, NULL, writer_proc, NULL);
 
+	uint64_t old_time = get_time_us();
+	uint64_t tot_bytes = 0;
+	uint32_t num_packets = 0;
+
 	while (!term && (pkt = alloc_packet())) {
 		int len = read(fd, pkt->data, MIN_PKT_LEN);
 		if (len < 0)
@@ -227,6 +231,16 @@ handle_tun(int fd)
 
 		uint64_t curr_time = get_time_us();
 		uint64_t time_to_send;
+
+		tot_bytes += len;
+		num_packets++;
+		if (old_time + 1000000u <= curr_time) {
+			printf("bytes/s %g\n", (double) tot_bytes * 1000000.0 / (curr_time - old_time));
+			printf("%u packets (avg %u)\n", num_packets, num_packets ? (unsigned) (tot_bytes / num_packets) : 0u);
+			old_time = curr_time;
+			tot_bytes = 0;
+			num_packets = 0;
+		}
 
 		pkt->len = len;
 		if (bytes_from_first_read == 0 || curr_time > first_received_at + bytes2time(bytes_from_first_read)) {
