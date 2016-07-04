@@ -109,11 +109,14 @@ buf_allocated(void)
 	return pkt_tail >= pkt_head ? pkt_tail - pkt_head : PKT_BUF_LEN + pkt_tail - pkt_head;
 }
 
+enum { PKT_DEBUG_ENABLED = 0 };
 #define PKT_DEBUG do { \
-	printf("%s:%d: head %u tail %u\n", __func__, __LINE__, pkt_head, pkt_tail); \
+	if (PKT_DEBUG_ENABLED) \
+		printf("%s:%d: head %u tail %u\n", __func__, __LINE__, pkt_head, pkt_tail); \
 } while(0)
 #define PKT_DEBUG_OUT do { \
-	printf("%s:%d: head %u tail %u -> %u\n", __func__, __LINE__, pkt_head, pkt_tail, (unsigned) ((uint8_t *) pkt - pkt_buf)); \
+	if (PKT_DEBUG_ENABLED) \
+		printf("%s:%d: head %u tail %u -> %u\n", __func__, __LINE__, pkt_head, pkt_tail, (unsigned) ((uint8_t *) pkt - pkt_buf)); \
 } while(0)
 
 /* get packet to write to */
@@ -140,7 +143,8 @@ static void
 add_packet(packet_t *pkt)
 {
 	PKT_DEBUG;
-	printf("added packet len %u\n", pkt->len);
+	if (PKT_DEBUG_ENABLED)
+		printf("added packet len %u\n", pkt->len);
 
 	pthread_mutex_lock(&pkt_buf_mtx);
 	pkt_tail += ROUND_UP(sizeof(packet_t) + pkt->len, 16);
