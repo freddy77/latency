@@ -1,4 +1,4 @@
-CFLAGS ?= -O2 -Wall
+CFLAGS ?= -O2 -Wall -g
 CC ?= gcc
 
 latency: latency.c tun.c utils.c
