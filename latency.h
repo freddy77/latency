@@ -1,5 +1,6 @@
 #include <stdint.h>
 
+extern volatile int term;
 extern int connect_port;
 extern uint64_t latency_us;
 extern unsigned rate_bytes;

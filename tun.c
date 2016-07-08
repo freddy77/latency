@@ -15,6 +15,7 @@
 #include <pthread.h>
 
 #include "tun.h"
+#include "latency.h"
 #include "utils.h"
 
 int tun_fd = -1;
@@ -188,6 +189,9 @@ static void* writer_proc(void *ptr)
 	packet_t *pkt;
 
 	while ((pkt = get_packet())) {
+		uint64_t curr_time = get_time_us();
+		if (pkt->time_to_send > curr_time)
+			usleep(pkt->time_to_send - curr_time);
 		write(tun_fd, pkt->data, pkt->len);
 		release_packet(pkt);
 	}
@@ -196,20 +200,49 @@ static void* writer_proc(void *ptr)
 
 /**/
 
+static double bytes2time_ratio;
+
+static inline int64_t
+bytes2time(int64_t bytes)
+{
+	return bytes * bytes2time_ratio;
+}
+
 void
 handle_tun(int fd)
 {
 	packet_t *pkt;
 	pthread_t writer;
+	uint64_t bytes_from_first_read = 0;
+	uint64_t first_received_at = 0;
+
+	bytes2time_ratio = (double) 1000000.0 / rate_bytes;
 
 	pthread_create(&writer, NULL, writer_proc, NULL);
 
-	while ((pkt = alloc_packet())) {
+	while (!term && (pkt = alloc_packet())) {
 		int len = read(fd, pkt->data, MIN_PKT_LEN);
 		if (len < 0)
 			break;
 
+		uint64_t curr_time = get_time_us();
+		uint64_t time_to_send;
+
 		pkt->len = len;
+		if (bytes_from_first_read == 0 || curr_time > first_received_at + bytes2time(bytes_from_first_read)) {
+			time_to_send = curr_time;
+			first_received_at = curr_time;
+			bytes_from_first_read = len;
+		} else {
+			time_to_send = first_received_at + bytes2time(bytes_from_first_read);
+			bytes_from_first_read += len;
+			/* reduce values avoiding possible overflows */
+			while (curr_time >= first_received_at + 1000000u && bytes_from_first_read >= rate_bytes) {
+				first_received_at += 1000000u;
+				bytes_from_first_read -= rate_bytes;
+			}
+		}
+		pkt->time_to_send = time_to_send + latency_us;
 		struct iphdr *ip = (struct iphdr *) pkt->data;
 		u_int32_t addr = ip->saddr;
 		ip->saddr = ip->daddr;
