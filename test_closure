@@ -3,8 +3,9 @@
 # Test the connection is closed correctly
 # after all data are sent even if real client
 # already closed the connection
-port1=8765
-port2=8764
+port=8765
+ip_listen=192.168.127.0
+ip=192.168.127.1
 set -e
 
 if ! nc --help &> /dev/null; then
@@ -13,22 +14,24 @@ if ! nc --help &> /dev/null; then
 fi
 
 # send a file quite long, check all is received
+dd if=latency of=latency.test bs=1024 count=19 &> /dev/null
 killall latency &> /dev/null || true
-nc -4l 127.0.0.1 $port1 > out &
-receive=$!
-./latency $port2 $port1 10ms 4K &
+./latency 10ms 4K > /dev/null &
 latency=$!
-sleep 0.05
-nc -4 127.0.0.1 $port2 < latency
+sleep 0.2
+nc -4l $ip_listen $port > out &
+receive=$!
+nc -4 $ip $port < latency.test
 ( sleep 5; kill $receive ) &
 sleep=$!
 disown $sleep
 wait $receive
 kill $latency || true
 kill $sleep || true
-if ! cmp out latency; then
+if ! cmp out latency.test; then
 	echo "Failure to send all data" >&2
 	exit 1
 fi
+rm -f latency.test
 rm out
 echo Test succeeded
