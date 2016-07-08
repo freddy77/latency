@@ -16,6 +16,7 @@
 #include <arpa/inet.h>
 
 #include "latency.h"
+#include "tun.h"
 #include "utils.h"
 
 volatile int term = 0;
@@ -83,6 +84,11 @@ static const unit rate_units[] = {
 int
 main(int argc, char **argv)
 {
+	tun_fd = tun_setup();
+
+	handle_tun(tun_fd);
+	return 1;
+
 	if (argc < 5)
 		usage();
 
