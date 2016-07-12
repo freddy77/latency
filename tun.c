@@ -234,6 +234,8 @@ handle_tun(int fd)
 			break;
 
 		struct iphdr *ip = (struct iphdr *) pkt->data;
+		if (ip->version != IPVERSION)
+			continue;
 		flow = &flows[ip->daddr == htonl(0xc0a87f00)];
 
 		uint64_t curr_time = get_time_us();
