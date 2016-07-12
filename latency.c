@@ -83,7 +83,19 @@ static const unit rate_units[] = {
 int
 main(int argc, char **argv)
 {
+	uid_t ruid = getuid(), euid = geteuid();
+	if (ruid != euid && euid == 0) {
+		clearenv();
+		setenv("HOME", "/root", 1);
+		setenv("PATH", "/sbin:/bin:/usr/sbin:/usr/bin", 1);
+		setenv("SHELL", "/bin/sh", 1);
+		setuid(0);
+	}
+
 	tun_fd = tun_setup();
+
+	if (ruid != euid)
+		setuid(ruid);
 
 	if (argc < 3)
 		usage();
