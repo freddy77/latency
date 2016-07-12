@@ -13,6 +13,8 @@
 #include <arpa/inet.h>
 #include <netinet/ip.h>
 #include <pthread.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 
 #include "tun.h"
 #include "latency.h"
@@ -74,6 +76,8 @@ int tun_setup(void)
 		perror("system");
 		exit(EXIT_FAILURE);
 	}
+
+	setpriority(PRIO_PROCESS, 0, -20);
 
 	return fd;
 }
