@@ -92,7 +92,7 @@ main(int argc, char **argv)
 		setuid(0);
 	}
 
-	tun_fd = tun_setup();
+	tun_setup();
 
 	if (ruid != euid)
 		setuid(ruid);
@@ -105,6 +105,6 @@ main(int argc, char **argv)
 
 	setup_signals();
 
-	handle_tun(tun_fd);
+	handle_tun();
 	return EXIT_SUCCESS;
 }

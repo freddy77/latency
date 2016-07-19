@@ -1,5 +1,3 @@
-extern int tun_fd;
+void tun_setup(void);
 
-int tun_setup(void);
-
-void handle_tun(int tun_fd);
+void handle_tun(void);

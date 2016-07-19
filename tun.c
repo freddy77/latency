@@ -20,7 +20,7 @@
 #include "latency.h"
 #include "utils.h"
 
-int tun_fd = -1;
+static int tun_fd = -1;
 
 /**
  * @param dev name of interface. MUST have enough
@@ -52,7 +52,7 @@ static int tun_alloc(char *dev, int flags)
 	return fd;
 }
 
-int tun_setup(void)
+void tun_setup(void)
 {
 	char tun_name[IFNAMSIZ];
 	int fd;
@@ -79,7 +79,7 @@ int tun_setup(void)
 
 	setpriority(PRIO_PROCESS, 0, -20);
 
-	return fd;
+	tun_fd = fd;
 }
 
 #define MIN_PKT_LEN 2000u
@@ -216,7 +216,7 @@ bytes2time(int64_t bytes)
 }
 
 void
-handle_tun(int fd)
+handle_tun(void)
 {
 	packet_t *pkt;
 	pthread_t writer;
@@ -233,7 +233,7 @@ handle_tun(int fd)
 	uint32_t num_packets = 0;
 
 	while (!term && (pkt = alloc_packet())) {
-		int len = read(fd, pkt->data, MIN_PKT_LEN);
+		int len = read(tun_fd, pkt->data, MIN_PKT_LEN);
 		if (len < 0)
 			break;
 
