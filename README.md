@@ -27,3 +27,6 @@ All numbers can be decimal, for instance:
 ```bash
 $ latency 10ms 2.3M
 ```
+
+Currently connecting to 192.168.127.1 allows to connect to
+the local machine with the connection modified as specified.
