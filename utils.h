@@ -4,6 +4,8 @@
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 
+#define IP(a,b,c,d) ((a)*0x1000000u+(b)*0x10000u+(c)*0x100u+(d)*1u)
+
 void set_nonblocking(int sock);
 void set_nodelay(int fd);
 void write_all(int fd, const void *buf, size_t buf_size);

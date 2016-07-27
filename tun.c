@@ -243,7 +243,7 @@ handle_tun(void)
 		struct iphdr *ip = (struct iphdr *) pkt->data;
 		if (ip->version != IPVERSION)
 			continue;
-		flow = &flows[ip->daddr == htonl(0xc0a87f00)];
+		flow = &flows[ip->daddr == htonl(IP(192,168,127,0))];
 
 		uint64_t curr_time = get_time_us();
 		uint64_t time_to_send;
