@@ -27,7 +27,8 @@ static int tun_fd = -1;
  *        space to hold the interface name if '\0' is passed
  * @param flags interface flags (eg, IFF_TUN etc.)
  */
-static int tun_alloc(char *dev, int flags)
+static int
+tun_alloc(char *dev, int flags)
 {
 	struct ifreq ifr;
 	int fd, err;
@@ -52,7 +53,8 @@ static int tun_alloc(char *dev, int flags)
 	return fd;
 }
 
-void tun_setup(void)
+void
+tun_setup(void)
 {
 	char tun_name[IFNAMSIZ];
 	int fd;
@@ -191,7 +193,8 @@ release_packet(packet_t *pkt)
 	free(pkt);
 }
 
-static void* writer_proc(void *ptr)
+static void*
+writer_proc(void *ptr)
 {
 	packet_t *pkt;
 
