@@ -3,6 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <poll.h>
+#include <errno.h>
+#include <stdbool.h>
 #include <sys/socket.h>
 #include <linux/if.h>
 #include <linux/if_tun.h>
@@ -21,6 +24,7 @@
 #include "utils.h"
 
 static int tun_fd = -1;
+static int remote_sock = -1;
 
 /**
  * @param dev name of interface. MUST have enough
@@ -82,6 +86,52 @@ tun_setup(void)
 	setpriority(PRIO_PROCESS, 0, -20);
 
 	tun_fd = fd;
+}
+
+static void
+create_remote_socket(void)
+{
+	remote_sock = socket(AF_INET, SOCK_DGRAM, 0);
+	if (remote_sock < 0) {
+		perror("socket");
+		exit(EXIT_FAILURE);
+	}
+}
+
+void
+tun_set_ip_port(const char *ip, int port)
+{
+	static in_addr_t redirect_ip;
+
+	if (port < 1 || port > 65535) {
+		fprintf(stderr, "Wrong port value %d\n", port);
+		exit(EXIT_FAILURE);
+	}
+
+	redirect_ip = inet_addr(ip);
+	if (redirect_ip == INADDR_NONE) {
+		fprintf(stderr, "Wrong ip format %s\n", ip);
+		exit(EXIT_FAILURE);
+	}
+
+	create_remote_socket();
+
+	struct sockaddr_in sin;
+	memset(&sin, 0, sizeof(sin));
+	sin.sin_family = AF_INET;
+	sin.sin_port = htons((short) port);
+
+	sin.sin_addr.s_addr = INADDR_ANY;
+	if (bind(remote_sock, (struct sockaddr *) &sin, sizeof(sin)) < 0) {
+		perror("bind");
+		exit(EXIT_FAILURE);
+	}
+
+	sin.sin_addr.s_addr = redirect_ip;
+	if (connect(remote_sock, (struct sockaddr *) &sin, sizeof(sin)) < 0) {
+		perror("connect");
+		exit(EXIT_FAILURE);
+	}
 }
 
 #define MIN_PKT_LEN 2000u
@@ -202,7 +252,10 @@ writer_proc(void *ptr)
 		uint64_t curr_time = get_time_us();
 		if (pkt->time_to_send > curr_time)
 			usleep(pkt->time_to_send - curr_time);
-		write(tun_fd, pkt->data, pkt->len);
+		if (remote_sock >= 0)
+			send(remote_sock, pkt->data, pkt->len, MSG_NOSIGNAL);
+		else
+			write(tun_fd, pkt->data, pkt->len);
 		release_packet(pkt);
 	}
 	return NULL;
@@ -235,8 +288,33 @@ handle_tun(void)
 	uint64_t tot_bytes = 0;
 	uint32_t num_packets = 0;
 
-	while (!term && (pkt = alloc_packet())) {
-		int len = read(tun_fd, pkt->data, MIN_PKT_LEN);
+	struct pollfd fds[2];
+	fds[0].fd = tun_fd;
+	fds[0].events = POLLIN;
+	fds[1].fd = remote_sock;
+	fds[1].events = POLLIN;
+	fds[1].revents = 0;
+
+	pkt = alloc_packet();
+	while (!term) {
+		if (poll(fds, 2, -1) < 0) {
+			if (errno != EINTR)
+				break;
+			continue;
+		}
+
+		int len;
+		if (fds[1].revents & POLLIN) {
+			len = recv(remote_sock, pkt->data, MIN_PKT_LEN, 0);
+			if (len <= 0)
+				break;
+			write(tun_fd, pkt->data, len);
+			continue;
+		} else if (fds[0].revents & POLLIN) {
+			len = read(tun_fd, pkt->data, MIN_PKT_LEN);
+		} else {
+			continue;
+		}
 		if (len < 0)
 			break;
 
@@ -279,5 +357,6 @@ handle_tun(void)
 		ip->daddr = addr;
 
 		add_packet(flow, pkt);
+		pkt = alloc_packet();
 	}
 }

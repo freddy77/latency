@@ -55,7 +55,7 @@ unsigned rate_bytes;
 static void
 usage(void)
 {
-	fprintf(stderr, "syntax: latency <latency> <rate>\n");
+	fprintf(stderr, "syntax: latency <latency> <rate> [<ip> <port>]\n");
 	exit(EXIT_FAILURE);
 }
 
@@ -102,6 +102,8 @@ main(int argc, char **argv)
 
 	latency_us = parse_value(argv[1], 0, 10000000, latency_units);
 	rate_bytes = parse_value(argv[2], 1, INT_MAX, rate_units);
+	if (argc >= 5)
+		tun_set_ip_port(argv[3], atoi(argv[4]));
 
 	setup_signals();
 
