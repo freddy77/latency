@@ -25,6 +25,28 @@
 
 static int tun_fd = -1;
 static int remote_sock = -1;
+static struct sockaddr_in remote_addr;
+static bool remote_connected = false;
+static bool is_server = false;
+
+/* Fake packets are used to send commands.
+ * A fake packet has a ip header with 0 check, saddr and daddr fields
+ * followed by all uint32_t fields.
+ * First field is the type, defined as follow.
+ */
+enum {
+	FAKE_settings = 1,
+};
+enum {
+	FAKE_FIELD_type = 0,
+	FAKE_FIELD_latency_us = 1,
+	FAKE_FIELD_rate_bytes = 2,
+};
+
+typedef struct {
+	struct iphdr iphdr;
+	uint32_t fields[4];
+} fake_ip_packet;
 
 /**
  * @param dev name of interface. MUST have enough
@@ -99,18 +121,45 @@ create_remote_socket(void)
 }
 
 void
-tun_set_ip_port(const char *ip, int port)
+tun_set_client(const char *ip, int port)
 {
-	static in_addr_t redirect_ip;
+	in_addr_t server_ip;
 
 	if (port < 1 || port > 65535) {
 		fprintf(stderr, "Wrong port value %d\n", port);
 		exit(EXIT_FAILURE);
 	}
 
-	redirect_ip = inet_addr(ip);
-	if (redirect_ip == INADDR_NONE) {
+	server_ip = inet_addr(ip);
+	if (server_ip == INADDR_NONE) {
 		fprintf(stderr, "Wrong ip format %s\n", ip);
+		exit(EXIT_FAILURE);
+	}
+
+	create_remote_socket();
+
+	memset(&remote_addr, 0, sizeof(remote_addr));
+	remote_addr.sin_family = AF_INET;
+	remote_addr.sin_port = htons((short) port);
+	remote_addr.sin_addr.s_addr = server_ip;
+
+	/* initialize server */
+	fake_ip_packet pkt;
+	memset(&pkt, 0, sizeof(pkt));
+	pkt.fields[FAKE_FIELD_type] = htonl(FAKE_settings);
+	pkt.fields[FAKE_FIELD_latency_us] = htonl(latency_us);
+	pkt.fields[FAKE_FIELD_rate_bytes] = htonl(rate_bytes);
+	sendto(remote_sock, &pkt, sizeof(pkt), MSG_NOSIGNAL,
+	       &remote_addr, sizeof(remote_addr));
+
+	remote_connected = true;
+}
+
+void
+tun_set_server(int port)
+{
+	if (port < 1 || port > 65535) {
+		fprintf(stderr, "Wrong port value %d\n", port);
 		exit(EXIT_FAILURE);
 	}
 
@@ -120,18 +169,14 @@ tun_set_ip_port(const char *ip, int port)
 	memset(&sin, 0, sizeof(sin));
 	sin.sin_family = AF_INET;
 	sin.sin_port = htons((short) port);
-
 	sin.sin_addr.s_addr = INADDR_ANY;
+
 	if (bind(remote_sock, (struct sockaddr *) &sin, sizeof(sin)) < 0) {
 		perror("bind");
 		exit(EXIT_FAILURE);
 	}
-
-	sin.sin_addr.s_addr = redirect_ip;
-	if (connect(remote_sock, (struct sockaddr *) &sin, sizeof(sin)) < 0) {
-		perror("connect");
-		exit(EXIT_FAILURE);
-	}
+	remote_connected = false;
+	is_server = true;
 }
 
 #define MIN_PKT_LEN 2000u
@@ -252,10 +297,13 @@ writer_proc(void *ptr)
 		uint64_t curr_time = get_time_us();
 		if (pkt->time_to_send > curr_time)
 			usleep(pkt->time_to_send - curr_time);
-		if (remote_sock >= 0)
-			send(remote_sock, pkt->data, pkt->len, MSG_NOSIGNAL);
-		else
+		if (remote_sock >= 0) {
+			if (remote_connected)
+				sendto(remote_sock, pkt->data, pkt->len, MSG_NOSIGNAL,
+				       &remote_addr, sizeof(remote_addr));
+		} else {
 			write(tun_fd, pkt->data, pkt->len);
+		}
 		release_packet(pkt);
 	}
 	return NULL;
@@ -269,6 +317,27 @@ static inline int64_t
 bytes2time(int64_t bytes)
 {
 	return bytes * bytes2time_ratio;
+}
+
+static bool
+handle_fake_packet(const uint8_t *data, size_t len)
+{
+	const fake_ip_packet *pkt = (const fake_ip_packet *) data;
+	if (pkt->iphdr.check || pkt->iphdr.saddr || pkt->iphdr.daddr)
+		return false;
+
+	const uint32_t *fields = pkt->fields;
+
+	switch (ntohl(fields[FAKE_FIELD_type])) {
+	case FAKE_settings:
+		latency_us = ntohl(fields[FAKE_FIELD_latency_us]);
+		rate_bytes = ntohl(fields[FAKE_FIELD_rate_bytes]);
+		if (!rate_bytes)
+			rate_bytes = 1;
+		bytes2time_ratio = (double) 1000000.0 / rate_bytes;
+		break;
+	}
+	return true;
 }
 
 void
@@ -305,16 +374,26 @@ handle_tun(void)
 
 		int len;
 		if (fds[1].revents & POLLIN) {
-			len = recv(remote_sock, pkt->data, MIN_PKT_LEN, 0);
+			if (!is_server) {
+				len = recv(remote_sock, pkt->data, MIN_PKT_LEN, 0);
+			} else {
+				socklen_t sock_len = sizeof(remote_addr);
+				len = recvfrom(remote_sock, pkt->data, MIN_PKT_LEN, 0,
+					       &remote_addr, &sock_len);
+			}
 			if (len <= 0)
 				break;
-			write(tun_fd, pkt->data, len);
-			continue;
-		} else if (fds[0].revents & POLLIN) {
-			len = read(tun_fd, pkt->data, MIN_PKT_LEN);
-		} else {
-			continue;
+			remote_connected = true;
+			if (len < sizeof(struct iphdr))
+				continue;
+			if (!handle_fake_packet(pkt->data, len))
+				write(tun_fd, pkt->data, len);
 		}
+
+		if ((fds[0].revents & POLLIN) == 0)
+			continue;
+
+		len = read(tun_fd, pkt->data, MIN_PKT_LEN);
 		if (len < 0)
 			break;
 

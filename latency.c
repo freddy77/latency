@@ -12,6 +12,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <limits.h>
+#include <getopt.h>
+#include <stdbool.h>
 #include <sys/wait.h>
 #include <arpa/inet.h>
 
@@ -53,10 +55,19 @@ uint64_t latency_us;
 unsigned rate_bytes;
 
 static void
-usage(void)
+usage(bool error)
 {
-	fprintf(stderr, "syntax: latency <latency> <rate> [<ip> <port>]\n");
-	exit(EXIT_FAILURE);
+	fprintf(error ? stderr : stdout,
+		"Usage:\n"
+		"\tlatency <latency> <rate> [--client <ip>] [OPTION]...\n"
+		"or\n"
+		"\tlatency --server [OPTION]...\n"
+		"\n"
+		"Options:\n"
+		"  -h, --help      Show this help\n"
+		"  --port <PORT>   Specify port to use (default 61234)\n"
+		);
+	exit(error ? EXIT_FAILURE : EXIT_SUCCESS);
 }
 
 static const unit latency_units[] = {
@@ -79,6 +90,11 @@ static const unit rate_units[] = {
 	{ NULL, 0 }
 };
 
+static const unit no_units[] = {
+	{ "", 1 },
+	{ NULL, 0 }
+};
+
 /**/
 int
 main(int argc, char **argv)
@@ -97,13 +113,57 @@ main(int argc, char **argv)
 	if (ruid != euid)
 		setuid(ruid);
 
-	if (argc < 3)
-		usage();
+	enum { MODE_undef, MODE_server, MODE_client } mode = MODE_undef;
+	enum { ARG_port = 256, ARG_client, ARG_server };
+	static struct option long_options[] = {
+		{"client",  required_argument, 0,  ARG_client },
+		{"server",  no_argument,       0,  ARG_server },
+		{"port",    required_argument, 0,  ARG_port },
+		{"help",    no_argument,       0,  'h' },
+		{0,         0,                 0,  0 }
+	};
 
-	latency_us = parse_value(argv[1], 0, 10000000, latency_units);
-	rate_bytes = parse_value(argv[2], 1, INT_MAX, rate_units);
-	if (argc >= 5)
-		tun_set_ip_port(argv[3], atoi(argv[4]));
+	const char *str_port = "61234";
+	const char *client_dest = NULL;
+	int ch;
+	while ((ch = getopt_long(argc, argv, "h", long_options, NULL)) != -1) {
+		switch (ch) {
+		case 'h':
+			usage(false);
+		case ARG_client:
+			if (mode == MODE_server)
+				usage(true);
+			mode = MODE_client;
+			client_dest = optarg;
+			break;
+		case ARG_server:
+			if (mode == MODE_client)
+				usage(true);
+			mode = MODE_server;
+			break;
+		case ARG_port:
+			str_port = optarg;
+			break;
+		default:
+			usage(true);
+		}
+	}
+	if (mode == MODE_undef)
+		mode = MODE_client;
+
+	int port = parse_value(str_port, 1, 65535, no_units);
+	if (mode == MODE_client) {
+		if (optind + 2 > argc)
+			usage(true);
+
+		latency_us = parse_value(argv[optind], 0, 10000000, latency_units);
+		rate_bytes = parse_value(argv[optind+1], 1, INT_MAX, rate_units);
+		tun_set_client(client_dest, port);
+	} else {
+		latency_us = 0;
+		rate_bytes = 100000000;
+		tun_set_server(port);
+	}
 
 	setup_signals();
 
