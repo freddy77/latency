@@ -113,7 +113,7 @@ main(int argc, char **argv)
 	if (ruid != euid)
 		setuid(ruid);
 
-	enum { MODE_undef, MODE_server, MODE_client } mode = MODE_undef;
+	enum { MODE_local, MODE_server, MODE_client } mode = MODE_local;
 	enum { ARG_port = 256, ARG_client, ARG_server };
 	static struct option long_options[] = {
 		{"client",  required_argument, 0,  ARG_client },
@@ -148,17 +148,16 @@ main(int argc, char **argv)
 			usage(true);
 		}
 	}
-	if (mode == MODE_undef)
-		mode = MODE_client;
 
 	int port = parse_value(str_port, 1, 65535, no_units);
-	if (mode == MODE_client) {
+	if (mode != MODE_server) {
 		if (optind + 2 > argc)
 			usage(true);
 
 		latency_us = parse_value(argv[optind], 0, 10000000, latency_units);
 		rate_bytes = parse_value(argv[optind+1], 1, INT_MAX, rate_units);
-		tun_set_client(client_dest, port);
+		if (mode == MODE_client)
+			tun_set_client(client_dest, port);
 	} else {
 		latency_us = 0;
 		rate_bytes = 100000000;
