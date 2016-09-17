@@ -1,23 +1,26 @@
-latency
-=======
+latency (1) -- Utility to help test network latency/bandwidth problems
+======================================================================
 
-Utility to help test network latency/bandwidth problems.
+## SYNOPSIS
+
+  `latency` *delay* *bandwidth* [`--client` *server_ip*] [*OPTION*]  
+or  
+  `latency` `--server` [*OPTION*]
+
+## DESCRIPTION
 
 This project provide an utility to help testing environments
 with high latency and low bandwidth.
 
 Currently requires root privileges as use tun/tap.
 
-Syntax:  
-  `latency` *delay* *bandwidth* [`--client` *server_ip*] [*OPTION*]  
-or  
-  `latency` `--server` [*OPTION*]
+## OPTIONS
 
-Options:
-
-  * `--port` *port* specify the port to use for client/server.
+  * `--port` *port*:
+    specify the port to use for client/server.
     The default is `61234`.
-  * `--help` show usage help.
+  * `--help`:
+    show usage help.
 
 For delay you can specify **ms** (milliseconds, default) or **s**
 (seconds) for unit.
@@ -36,6 +39,8 @@ All numbers can be decimal, for instance:
 ```bash
 $ latency 10ms 2.3M
 ```
+
+## USAGE
 
 Currently connecting to 192.168.127.1 allows to connect to
 the local machine with the connection modified as specified.
