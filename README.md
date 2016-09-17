@@ -59,7 +59,7 @@ the client where is frequent to change latency/bandwidth make this
 change easier (currently you have to stop the client and open with
 new options).
 
-The client/server used UDP protocol. The server will bind to the UDP
+The client/server use UDP protocol. The server will bind to the UDP
 port specified while the client will send packets to this port. If
 something is not working check your firewall for this port/protocol.
 
