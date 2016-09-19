@@ -30,6 +30,8 @@ For bandwidth you can specify:
  * **K** (1024 bytes/s)
  * **m** (1000000 bytes/s)
  * **M** (1048576 bytes/s)
+ * **g** (1000000000 bytes/s)
+ * **G** (1073741824 bytes/s)
 
 Also adding **bit** (ie **Mbit**) to specify bits instead of
 bytes.
