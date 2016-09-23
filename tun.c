@@ -99,7 +99,7 @@ tun_setup(void)
 		exit(EXIT_FAILURE);
 	}
 
-	sprintf(cmd, "ip addr add 192.168.127.0/30 dev %s", tun_name);
+	sprintf(cmd, "ip addr add 192.168.127.0/31 dev %s", tun_name);
 	if (system(cmd) != 0) {
 		perror("system");
 		exit(EXIT_FAILURE);
