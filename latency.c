@@ -109,13 +109,20 @@ main(int argc, char **argv)
 		setenv("HOME", "/root", 1);
 		setenv("PATH", "/sbin:/bin:/usr/sbin:/usr/bin", 1);
 		setenv("SHELL", "/bin/sh", 1);
-		setuid(0);
+		if (setuid(0)) {
+			perror("setuid");
+			exit(EXIT_FAILURE);
+		}
 	}
 
 	tun_setup();
 
-	if (ruid != euid)
-		setuid(ruid);
+	if (ruid != euid) {
+		if (setuid(ruid)) {
+			perror("setuid");
+			exit(EXIT_FAILURE);
+		}
+	}
 
 	enum { MODE_local, MODE_server, MODE_client } mode = MODE_local;
 	enum { ARG_port = 256, ARG_client, ARG_server };
