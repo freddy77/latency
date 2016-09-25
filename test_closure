@@ -8,7 +8,7 @@ ip_listen=192.168.127.0
 ip=192.168.127.1
 set -e
 
-if ! nc --help &> /dev/null; then
+if ! nc -h &> /dev/null; then
 	echo "This test require netcat to be installed" >&2
 	exit 1
 fi
