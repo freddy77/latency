@@ -180,6 +180,11 @@ tun_set_server(int port)
 }
 
 #define MIN_PKT_LEN 2000u
+/* This buffer is quite big to account 2 flows in a single tun device
+ * This to avoid that packet sent delay packet received (or viceversa)
+ * We should use 2 tun devices to have 2 queues and reduce the
+ * queue to a minimum.
+ */
 #define PKT_BUF_LEN (1024u * 1024u * 32u)
 #define NUM_FLOWS 2
 
@@ -255,6 +260,7 @@ get_packet(void)
 	while (buf_allocated() == 0)
 		pthread_cond_wait(&pkt_cond_write, &pkt_buf_mtx);
 
+	/* get the flow with the packet with minimum time to send */
 	min_flow = NULL;
 	for (n = 0; n < NUM_FLOWS; ++n) {
 		flow_info *flow = &flows[n];
@@ -319,10 +325,13 @@ bytes2time(int64_t bytes)
 	return bytes * bytes2time_ratio;
 }
 
+/* handke fake packets, return true if fake one */
 static bool
 handle_fake_packet(const uint8_t *data, size_t len)
 {
 	const fake_ip_packet *pkt = (const fake_ip_packet *) data;
+
+	/* a fake packet has these 3 fields set to zeroes */
 	if (pkt->iphdr.check || pkt->iphdr.saddr || pkt->iphdr.daddr)
 		return false;
 
@@ -377,6 +386,8 @@ handle_tun(void)
 			if (!is_server) {
 				len = recv(remote_sock, pkt->data, MIN_PKT_LEN, 0);
 			} else {
+				/* for server we record the source address to
+				 * be able to send packet back */
 				socklen_t sock_len = sizeof(remote_addr);
 				len = recvfrom(remote_sock, pkt->data, MIN_PKT_LEN, 0,
 					       &remote_addr, &sock_len);
@@ -396,6 +407,7 @@ handle_tun(void)
 		len = read(tun_fd, pkt->data, MIN_PKT_LEN);
 		if (len < 0)
 			break;
+		pkt->len = len;
 
 		struct iphdr *ip = (struct iphdr *) pkt->data;
 		if (ip->version != IPVERSION)
@@ -403,8 +415,9 @@ handle_tun(void)
 		flow = &flows[ip->daddr == htonl(IP(192,168,127,0))];
 
 		uint64_t curr_time = get_time_us();
-		uint64_t time_to_send;
 
+		/* just some debugging on speed */
+		/* TODO improve */
 		tot_bytes += len;
 		num_packets++;
 		if (old_time + 1000000u <= curr_time) {
@@ -415,7 +428,15 @@ handle_tun(void)
 			num_packets = 0;
 		}
 
-		pkt->len = len;
+		/* Compute time to send the packet.
+		 * Adjusting for latency is easy, just current time + latency.
+		 * For bandwidth is a bit more complicated as we must take
+		 * into account that if data flow stop after a while we must
+		 * not delay next packet. Also to avoid accumulating error and
+		 * assuming the source flow is quite fast we must compute from
+		 * first packet we took as reference.
+		 */
+		uint64_t time_to_send;
 		if (flow->bytes_from_first_read == 0
 		    || curr_time > flow->first_received_at + bytes2time(flow->bytes_from_first_read)) {
 			time_to_send = curr_time;
@@ -424,13 +445,18 @@ handle_tun(void)
 		} else {
 			time_to_send = flow->first_received_at + bytes2time(flow->bytes_from_first_read);
 			flow->bytes_from_first_read += len;
-			/* reduce values avoiding possible overflows */
+			/* reduce values avoiding possible overflows and
+			 * increasing precision (due to floating point
+			 * numbers) */
 			while (curr_time >= flow->first_received_at + 1000000u && flow->bytes_from_first_read >= rate_bytes) {
 				flow->first_received_at += 1000000u;
 				flow->bytes_from_first_read -= rate_bytes;
 			}
 		}
 		pkt->time_to_send = time_to_send + latency_us;
+
+		/* swap source and destination IPs to forward the packet
+		 * coming from the real machine back to the machine again */
 		u_int32_t addr = ip->saddr;
 		ip->saddr = ip->daddr;
 		ip->daddr = addr;
