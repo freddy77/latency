@@ -23,7 +23,8 @@ Currently requires root privileges as use tun/tap.
     show usage help.
 
 For delay you can specify **ms** (milliseconds, default) or **s**
-(seconds) for unit.
+(seconds) for unit. The delay is added to the real one, there is no
+attempt to discover the current delay.
 For bandwidth you can specify:
 
  * **k** (1000 bytes/s)
@@ -73,3 +74,42 @@ something is not working check your firewall for this port/protocol.
 For better results use the restricted latency/bandwidth over a more
 powerful connection (like 1 Gbit cable). This will allow to have for
 instance a unrestricted connection (like ssh) and a restricted one.
+
+## NOTES
+
+This program was written for test purposes, is not expected to be
+used in production (like used for QoS).
+
+It can be used to test some conditions but is not so sofisticated
+to reproduce real network conditions. For instance latency in a real
+network is not constant but always have fluctuations.
+On the other end this determinism may be used for test reproductions
+as conditions are much more predictable.
+For instance using local connections and same parameters you can
+expect the same results so timing data used for performance are
+reasonable more accurate than using a real network.
+
+## HISTORY
+
+This program was written to have an easy way to try reproduce some
+limited networks conditions. Mainly for testing a program that was
+using tcp connections.
+
+At the beginning I was using a Linux script that used traffic shaper
+and some emulation module.
+However this was quite complicate to use and I discovered the kernel
+too much tweaks on the packets causing some issues.
+Trying to fix the problems with kernel modules was not easy and
+wouldn't fix the easiness (actually would have more complicated to
+update) so I decided to write something in userspace.
+
+At the beginning it was a tcp socket proxy which added latency and
+bandwidth control but this could not reproduce some issues due to
+acks latency and didn't allows the programs to check the network
+queues (as emptied by the proxy).
+
+I knowed a solution would be to use tun/tap but I didn't like the
+idea of having to be root but the limitations were too high and I
+came to use tun/tap with a SUID executable.
+
+Result is quite neat and easy to use.
