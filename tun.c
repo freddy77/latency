@@ -257,8 +257,14 @@ get_packet(void)
 	unsigned n;
 
 	pthread_mutex_lock(&pkt_buf_mtx);
-	while (buf_allocated() == 0)
+	while (!term && buf_allocated() == 0) {
 		pthread_cond_wait(&pkt_cond_write, &pkt_buf_mtx);
+	}
+	if (term) {
+		pthread_mutex_unlock(&pkt_buf_mtx);
+		return NULL;
+	}
+
 
 	/* get the flow with the packet with minimum time to send */
 	min_flow = NULL;
@@ -464,4 +470,13 @@ handle_tun(void)
 		add_packet(flow, pkt);
 		pkt = alloc_packet();
 	}
+	term = 1;
+
+	/* wake up write if blocked to pick up the termination */
+	pthread_mutex_lock(&pkt_buf_mtx);
+	pthread_cond_signal(&pkt_cond_write);
+	pthread_mutex_unlock(&pkt_buf_mtx);
+
+	/* wait writer termination */
+	pthread_join(writer, NULL);
 }
