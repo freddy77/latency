@@ -1,5 +1,5 @@
 Name:		latency
-Version:	1.0
+Version:	@VERSION@
 Release:	1%{?dist}
 Summary:	Utility to help test network latency/bandwidth problems
 
