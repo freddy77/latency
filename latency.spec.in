@@ -18,12 +18,11 @@ latency and low bandwidth.
 %setup -q
 
 %build
-make %{?_smp_mflags}
+%configure
+%make_build
 
 %install
-mkdir -p $RPM_BUILD_ROOT%{_mandir}/man1 $RPM_BUILD_ROOT/%{_bindir}
-cp latency.1 $RPM_BUILD_ROOT%{_mandir}/man1/latency.1
-cp latency $RPM_BUILD_ROOT/%{_bindir}/latency
+%make_install
 
 %files
 %defattr(-,root,root,-)
