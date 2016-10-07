@@ -6,9 +6,11 @@ latency_SOURCES = \
 	latency.c \
 	tun.c \
 	utils.c \
+	pcap.c \
 	latency.h \
 	tun.h \
 	utils.h \
+	pcap.h \
 	$(NULL)
 latency_LDFLAGS = -pthread
 
