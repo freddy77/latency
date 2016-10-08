@@ -15,3 +15,7 @@ LDADD = \
 
 TESTS += delay
 delay_SOURCES = delay.c
+
+TESTS += bandwidth
+bandwidth_SOURCES = bandwidth.c
+bandwidth_LDFLAGS = -pthread

@@ -21,4 +21,5 @@ latency.spec
 ar-lib
 tests/libtest.a
 tests/delay
+tests/bandwidth
 .*.swp
