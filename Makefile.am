@@ -1,4 +1,5 @@
 NULL =
+SUBDIRS = . tests
 
 bin_PROGRAMS = latency
 latency_SOURCES = \

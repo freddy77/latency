@@ -18,3 +18,7 @@ depcomp
 missing
 *.o
 latency.spec
+ar-lib
+tests/libtest.a
+tests/delay
+.*.swp
