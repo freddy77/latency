@@ -1,4 +1,8 @@
-/* check that the delay we setup is respected */
+/* Check bandwidth set is respected.
+ * This tests uses UDP packets as they not depend on window or
+ * other TCP synchronizations and also is easier to compute
+ * bandwidth as header is simpler.
+ */
 #include "common.h"
 #include "../utils.h"
 #include <poll.h>
