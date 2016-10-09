@@ -16,7 +16,7 @@ latency_running(void)
 	int sock = socket(AF_INET, SOCK_DGRAM, 0);
 	assert(sock >= 0);
 	setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (const void *) &socktrue, sizeof(socktrue));
-	setup_addr(&addr, "192.168.127.0", 0);
+	setup_addr(&addr, "192.168.127.2", 0);
 	bool res;
 	if (bind(sock, &addr.generic, sizeof(addr)) == 0) {
 		res = true;
@@ -127,7 +127,7 @@ create_udp_pair(int socks[2])
 	assert(sock >= 0);
 	socks[1] = sock;
 	setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (const void *) &socktrue, sizeof(socktrue));
-	setup_addr(&addr, "192.168.127.0", 0);
+	setup_addr(&addr, "192.168.127.2", 0);
 	assert(bind(sock, &addr.generic, sizeof(addr)) == 0);
 	addr_len = sizeof(addr);
 	assert(getsockname(sock, &addr.generic, &addr_len) == 0);
@@ -136,7 +136,7 @@ create_udp_pair(int socks[2])
 	// make a pair from the above ones
 	setup_addr(&addr, "192.168.127.1", ports[1]);
 	assert(connect(socks[0], &addr.generic, sizeof(addr)) == 0);
-	setup_addr(&addr, "192.168.127.1", ports[0]);
+	setup_addr(&addr, "192.168.127.3", ports[0]);
 	assert(connect(socks[1], &addr.generic, sizeof(addr)) == 0);
 }
 

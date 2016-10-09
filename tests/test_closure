@@ -4,7 +4,7 @@
 # after all data are sent even if real client
 # already closed the connection
 port=8765
-ip_listen=192.168.127.0
+ip_listen=192.168.127.2
 ip=192.168.127.1
 set -e
 

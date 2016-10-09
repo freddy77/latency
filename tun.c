@@ -15,15 +15,19 @@
 #include <fcntl.h>
 #include <arpa/inet.h>
 #include <netinet/ip.h>
+#include <netinet/tcp.h>
+#include <netinet/udp.h>
 #include <pthread.h>
 #include <sys/time.h>
 #include <sys/resource.h>
+#include <assert.h>
 
 #include "tun.h"
 #include "latency.h"
 #include "utils.h"
 
 static int tun_fd = -1;
+static int tun_fd_back = -1;
 static int remote_sock = -1;
 static struct sockaddr_in remote_addr;
 static bool remote_connected = false;
@@ -79,8 +83,8 @@ tun_alloc(char *dev, int flags)
 	return fd;
 }
 
-void
-tun_setup(void)
+static int
+tun_init(const char *ip)
 {
 	char tun_name[IFNAMSIZ];
 	int fd;
@@ -99,20 +103,35 @@ tun_setup(void)
 		exit(EXIT_FAILURE);
 	}
 
-	sprintf(cmd, "ip addr add 192.168.127.0/31 dev %s", tun_name);
+	sprintf(cmd, "ip addr add %s dev %s", ip, tun_name);
 	if (system(cmd) != 0) {
 		perror("system");
 		exit(EXIT_FAILURE);
 	}
 
-	setpriority(PRIO_PROCESS, 0, -20);
+	return fd;
+}
 
-	tun_fd = fd;
+void
+tun_setup(bool local_mode)
+{
+	tun_fd = tun_init("192.168.127.0/31");
+
+	if (local_mode)
+		tun_fd_back = tun_init("192.168.127.2/31");
+
+	setpriority(PRIO_PROCESS, 0, -20);
 }
 
 static void
 create_remote_socket(void)
 {
+	if (tun_fd_back >= 0) {
+		fprintf(stderr,	"Internal error: "
+			"remote requested and local specified\n");
+		exit(EXIT_FAILURE);
+	}
+
 	remote_sock = socket(AF_INET, SOCK_DGRAM, 0);
 	if (remote_sock < 0) {
 		perror("socket");
@@ -195,6 +214,7 @@ static pthread_cond_t pkt_cond_read  = PTHREAD_COND_INITIALIZER;
 typedef struct packet {
 	struct packet *next;
 	uint64_t time_to_send;
+	int dest_tun;
 	uint16_t len;
 	/* minimum MIN_PKT_LEN */
 	uint8_t data[];
@@ -314,7 +334,7 @@ writer_proc(void *ptr)
 				sendto(remote_sock, pkt->data, pkt->len, MSG_NOSIGNAL,
 				       &remote_addr, sizeof(remote_addr));
 		} else {
-			write(tun_fd, pkt->data, pkt->len);
+			write(pkt->dest_tun, pkt->data, pkt->len);
 		}
 		release_packet(pkt);
 	}
@@ -355,6 +375,70 @@ handle_fake_packet(const uint8_t *data, size_t len)
 	return true;
 }
 
+static inline unsigned
+reduce_cksum(unsigned sum)
+{
+	return (sum >> 16) + (sum & 0xffffu);
+}
+
+static unsigned
+cksum(const void *pkt, size_t len, unsigned int start)
+{
+	const uint16_t *data = (const uint16_t *) pkt;
+	unsigned sum = start;
+
+	for (; len >= 2; len -= 2)
+		sum += *data++;
+	if (len)
+		sum += ntohs(*((const uint8_t *)data) << 8);
+	sum = reduce_cksum(sum);
+	sum = reduce_cksum(sum);
+	assert(sum < 0x10000u);
+	return sum;
+}
+
+static void
+nat_addresses(struct iphdr *ip)
+{
+	u_int32_t saddr = ip->saddr;
+	if (remote_sock >= 0) {
+		/* swap source and destination IPs to forward the packet
+		 * coming from the real machine back to the machine again */
+		ip->saddr = ip->daddr;
+		ip->daddr = saddr;
+		return;
+	}
+
+	/* we must do some more work for local case */
+	unsigned pre = cksum(&ip->saddr, 8, 0); // 2 IPs
+
+	if (saddr == htonl(IP(192,168,127,0))) {
+		// going 127.0 -> 127.1
+		ip->saddr = htonl(IP(192,168,127,3));
+		ip->daddr = htonl(IP(192,168,127,2));
+	} else {
+		// back 127.2 -> 127.3
+		ip->saddr = htonl(IP(192,168,127,1));
+		ip->daddr = htonl(IP(192,168,127,0));
+	}
+
+	// adjust checksums for IP, TCP, UDP and UDP-LITE
+	unsigned adjust_cksum = reduce_cksum(pre + 0xffffu - cksum(&ip->saddr, 8, 0));
+	ip->check = reduce_cksum(ip->check + adjust_cksum);
+	if (ip->protocol == IPPROTO_TCP) {
+		uint8_t *data = (uint8_t *) ip;
+		struct tcphdr *tcp = (struct tcphdr *) &data[ip->ihl*4];
+		tcp->check = reduce_cksum(tcp->check + adjust_cksum);
+	}
+	if (ip->protocol == IPPROTO_UDP || ip->protocol == IPPROTO_UDPLITE) {
+		uint8_t *data = (uint8_t *) ip;
+		struct udphdr *udp = (struct udphdr *) &data[ip->ihl*4];
+		if (udp->check) {
+			udp->check = reduce_cksum(udp->check + adjust_cksum);
+		}
+	}
+}
+
 void
 handle_tun(void)
 {
@@ -375,7 +459,7 @@ handle_tun(void)
 	struct pollfd fds[2];
 	fds[0].fd = tun_fd;
 	fds[0].events = POLLIN;
-	fds[1].fd = remote_sock;
+	fds[1].fd = remote_sock >= 0 ? remote_sock : tun_fd_back;
 	fds[1].events = POLLIN;
 	fds[1].revents = 0;
 
@@ -388,7 +472,7 @@ handle_tun(void)
 		}
 
 		int len;
-		if (fds[1].revents & POLLIN) {
+		if ((fds[1].revents & POLLIN) != 0 && remote_sock >= 0) {
 			if (!is_server) {
 				len = recv(remote_sock, pkt->data, MIN_PKT_LEN, 0);
 			} else {
@@ -407,10 +491,18 @@ handle_tun(void)
 				write(tun_fd, pkt->data, len);
 		}
 
-		if ((fds[0].revents & POLLIN) == 0)
+		if ((fds[1].revents & POLLIN) != 0 && tun_fd_back >= 0) {
+			len = read(tun_fd_back, pkt->data, MIN_PKT_LEN);
+			pkt->dest_tun = tun_fd;
+			flow = &flows[1];
+		} else if ((fds[0].revents & POLLIN) != 0) {
+			len = read(tun_fd, pkt->data, MIN_PKT_LEN);
+			pkt->dest_tun = tun_fd_back;
+			flow = &flows[0];
+		} else {
 			continue;
+		}
 
-		len = read(tun_fd, pkt->data, MIN_PKT_LEN);
 		if (len < 0)
 			break;
 		pkt->len = len;
@@ -418,7 +510,6 @@ handle_tun(void)
 		struct iphdr *ip = (struct iphdr *) pkt->data;
 		if (ip->version != IPVERSION)
 			continue;
-		flow = &flows[ip->daddr == htonl(IP(192,168,127,0))];
 
 		uint64_t curr_time = get_time_us();
 
@@ -461,11 +552,7 @@ handle_tun(void)
 		}
 		pkt->time_to_send = time_to_send + latency_us;
 
-		/* swap source and destination IPs to forward the packet
-		 * coming from the real machine back to the machine again */
-		u_int32_t addr = ip->saddr;
-		ip->saddr = ip->daddr;
-		ip->daddr = addr;
+		nat_addresses(ip);
 
 		add_packet(flow, pkt);
 		pkt = alloc_packet();

@@ -125,6 +125,16 @@ test_bandwidth(unsigned bw)
 	send_proc(SOCK2PTR(udp_socks[1]));
 	check_res(th[0], expected);
 
+	// both at the same time
+	flush_socks();
+	assert(pthread_create(&th[0], NULL, recv_proc, SOCK2PTR(udp_socks[0])) == 0);
+	assert(pthread_create(&th[1], NULL, recv_proc, SOCK2PTR(udp_socks[1])) == 0);
+	assert(pthread_create(&th[2], NULL, send_proc, SOCK2PTR(udp_socks[0])) == 0);
+	send_proc(SOCK2PTR(udp_socks[1]));
+	assert(pthread_join(th[2], NULL) == 0);
+	check_res(th[0], expected);
+	check_res(th[1], expected);
+
 	close_udp_pair(udp_socks);
 	kill_latency();
 }

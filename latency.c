@@ -115,15 +115,6 @@ main(int argc, char **argv)
 		}
 	}
 
-	tun_setup();
-
-	if (ruid != euid) {
-		if (setuid(ruid)) {
-			perror("setuid");
-			exit(EXIT_FAILURE);
-		}
-	}
-
 	enum { MODE_local, MODE_server, MODE_client } mode = MODE_local;
 	enum { ARG_port = 256, ARG_client, ARG_server };
 	static struct option long_options[] = {
@@ -157,6 +148,15 @@ main(int argc, char **argv)
 			break;
 		default:
 			usage(true);
+		}
+	}
+
+	tun_setup(mode == MODE_local);
+
+	if (ruid != euid) {
+		if (setuid(ruid)) {
+			perror("setuid");
+			exit(EXIT_FAILURE);
 		}
 	}
 
