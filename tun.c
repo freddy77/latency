@@ -25,6 +25,7 @@
 #include "tun.h"
 #include "latency.h"
 #include "utils.h"
+#include "pcap.h"
 
 static int tun_fd = -1;
 static int tun_fd_back = -1;
@@ -32,6 +33,9 @@ static int remote_sock = -1;
 static struct sockaddr_in remote_addr;
 static bool remote_connected = false;
 static bool is_server = false;
+static pcap_file *pcap = NULL;
+
+const char *tun_log_filename = NULL;
 
 /* Fake packets are used to send commands.
  * A fake packet has a ip header with 0 check, saddr and daddr fields
@@ -210,6 +214,7 @@ tun_set_server(int port)
 static pthread_mutex_t pkt_buf_mtx = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t pkt_cond_write = PTHREAD_COND_INITIALIZER;
 static pthread_cond_t pkt_cond_read  = PTHREAD_COND_INITIALIZER;
+static pthread_mutex_t log_mtx = PTHREAD_MUTEX_INITIALIZER;
 
 typedef struct packet {
 	struct packet *next;
@@ -320,6 +325,16 @@ release_packet(packet_t *pkt)
 	free(pkt);
 }
 
+static void
+log_write_ip(const void *raw_ip, size_t len)
+{
+	if (!pcap)
+		return;
+	pthread_mutex_lock(&log_mtx);
+	pcap_write_ip(pcap, raw_ip, len);
+	pthread_mutex_unlock(&log_mtx);
+}
+
 static void*
 writer_proc(void *ptr)
 {
@@ -334,6 +349,8 @@ writer_proc(void *ptr)
 				sendto(remote_sock, pkt->data, pkt->len, MSG_NOSIGNAL,
 				       &remote_addr, sizeof(remote_addr));
 		} else {
+			if (pkt->dest_tun == tun_fd)
+				log_write_ip(pkt->data, pkt->len);
 			write(pkt->dest_tun, pkt->data, pkt->len);
 		}
 		release_packet(pkt);
@@ -450,6 +467,14 @@ handle_tun(void)
 
 	bytes2time_ratio = (double) 1000000.0 / rate_bytes;
 
+	if (tun_log_filename) {
+		pcap = pcap_open(tun_log_filename);
+		if (!pcap) {
+			perror("error opening log file");
+			exit(EXIT_FAILURE);
+		}
+	}
+
 	pthread_create(&writer, NULL, writer_proc, NULL);
 
 	uint64_t old_time = get_time_us();
@@ -487,8 +512,10 @@ handle_tun(void)
 			remote_connected = true;
 			if (len < sizeof(struct iphdr))
 				continue;
-			if (!handle_fake_packet(pkt->data, len))
+			if (!handle_fake_packet(pkt->data, len)) {
+				log_write_ip(pkt->data, pkt->len);
 				write(tun_fd, pkt->data, len);
+			}
 		}
 
 		if ((fds[1].revents & POLLIN) != 0 && tun_fd_back >= 0) {
@@ -506,6 +533,9 @@ handle_tun(void)
 		if (len < 0)
 			break;
 		pkt->len = len;
+
+		if (pkt->dest_tun == tun_fd_back)
+			log_write_ip(pkt->data, pkt->len);
 
 		struct iphdr *ip = (struct iphdr *) pkt->data;
 		if (ip->version != IPVERSION)
@@ -566,4 +596,6 @@ handle_tun(void)
 
 	/* wait writer termination */
 	pthread_join(writer, NULL);
+
+	pcap_close(pcap);
 }
