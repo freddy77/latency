@@ -1,8 +1,11 @@
 NULL =
 
-TESTS =
-noinst_PROGRAMS = $(TESTS)
-check_PROGRAMS = $(TESTS)
+TESTS = \
+	$(check_PROGRAMS) \
+	test_closure \
+	$(NULL)
+noinst_PROGRAMS = $(check_PROGRAMS)
+check_PROGRAMS =
 
 # common code
 noinst_LIBRARIES = libtest.a
@@ -14,12 +17,12 @@ LDADD = \
 	libtest.a \
 	$(NULL)
 
-TESTS += delay
+check_PROGRAMS += delay
 delay_SOURCES = delay.c
 
-TESTS += bandwidth
+check_PROGRAMS += bandwidth
 bandwidth_SOURCES = bandwidth.c
 bandwidth_LDFLAGS = -pthread
 
-TESTS += ping
+check_PROGRAMS += ping
 ping_SOURCES = ping.c

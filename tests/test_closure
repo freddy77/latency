@@ -14,9 +14,9 @@ if ! nc -h &> /dev/null; then
 fi
 
 # send a file quite long, check all is received
-dd if=latency of=latency.test bs=1024 count=19 &> /dev/null
+dd if=../latency of=latency.test bs=1000 count=18 &> /dev/null
 killall latency &> /dev/null || true
-./latency 10ms 4K > /dev/null &
+../latency 10ms 4K > /dev/null &
 latency=$!
 sleep 0.2
 nc -4l $ip_listen $port > out &
