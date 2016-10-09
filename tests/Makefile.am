@@ -8,6 +8,7 @@ check_PROGRAMS = $(TESTS)
 noinst_LIBRARIES = libtest.a
 libtest_a_SOURCES = \
 	common.c \
+	common.h \
 	$(NULL)
 LDADD = \
 	libtest.a \
