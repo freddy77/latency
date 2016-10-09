@@ -10,6 +10,7 @@
 
 #define MIN_IP_UDP_HEADER 28
 
+static unsigned current_bw = 0;
 static int udp_socks[2] = { -1, -1 };
 
 typedef struct {
@@ -31,11 +32,8 @@ send_proc(void *arg)
 
 	uint64_t start_time = get_time_us();
 	while (get_time_us() - start_time < 130 * 1000) {
-		send(sock, &payload, sizeof(payload), MSG_NOSIGNAL);
-		send(sock, &payload, sizeof(payload), MSG_NOSIGNAL);
-		send(sock, &payload, sizeof(payload), MSG_NOSIGNAL);
-		send(sock, &payload, sizeof(payload), MSG_NOSIGNAL);
-		send(sock, &payload, sizeof(payload), MSG_NOSIGNAL);
+		for (n = current_bw / 4; n >= 0; --n)
+			send(sock, &payload, sizeof(payload), MSG_NOSIGNAL);
 		usleep(1000);
 	}
 	return NULL;
@@ -94,6 +92,8 @@ flush_socks(void)
 static void
 test_bandwidth(unsigned bw)
 {
+	current_bw = bw;
+
 	pthread_t th[3];
 	void *thread_res;
 	unsigned bytes_received;
