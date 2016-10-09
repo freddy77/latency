@@ -22,4 +22,5 @@ ar-lib
 tests/libtest.a
 tests/delay
 tests/bandwidth
+tests/ping
 .*.swp

@@ -20,3 +20,6 @@ delay_SOURCES = delay.c
 TESTS += bandwidth
 bandwidth_SOURCES = bandwidth.c
 bandwidth_LDFLAGS = -pthread
+
+TESTS += ping
+ping_SOURCES = ping.c
