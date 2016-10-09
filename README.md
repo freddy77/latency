@@ -19,6 +19,8 @@ Currently requires root privileges as use tun/tap.
   * `--port` *port*:
     specify the port to use for client/server.
     The default is `61234`.
+  * `--cap-file` *filename*:
+    specify a file name to write captured packets (in tcpdump/pcap format).
   * `--help`:
     show usage help.
 
