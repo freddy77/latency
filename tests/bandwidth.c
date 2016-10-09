@@ -90,13 +90,24 @@ flush_socks(void)
 }
 
 static void
+check_res(pthread_t th, unsigned expected)
+{
+	void *thread_res;
+	assert(pthread_join(th, &thread_res) == 0);
+
+	unsigned bytes_received = (uintptr_t) thread_res;
+
+	printf("received %u/%u\n", bytes_received, expected);
+	// check into -5% to +5%
+	assert(bytes_received >= expected * 0.96 && bytes_received <= expected * 1.04);
+}
+
+static void
 test_bandwidth(unsigned bw)
 {
 	current_bw = bw;
 
 	pthread_t th[3];
-	void *thread_res;
-	unsigned bytes_received;
 	unsigned expected = 1024 * 1024 * bw / 8 / 10 + 1 * (1024 + MIN_IP_UDP_HEADER);
 
 	// launch program with given latency
@@ -106,21 +117,13 @@ test_bandwidth(unsigned bw)
 	// one direction
 	assert(pthread_create(th, NULL, recv_proc, SOCK2PTR(udp_socks[1])) == 0);
 	send_proc(SOCK2PTR(udp_socks[0]));
-	assert(pthread_join(th[0], &thread_res) == 0);
-	bytes_received = (uintptr_t) thread_res;
-	printf("received %u/%u\n", bytes_received, expected);
-	// check into -5% to +5%
-	assert(bytes_received >= expected * 0.96 && bytes_received <= expected * 1.04);
+	check_res(th[0], expected);
 
 	// other direction
 	flush_socks();
 	assert(pthread_create(th, NULL, recv_proc, SOCK2PTR(udp_socks[0])) == 0);
 	send_proc(SOCK2PTR(udp_socks[1]));
-	assert(pthread_join(th[0], &thread_res) == 0);
-	bytes_received = (uintptr_t) thread_res;
-	printf("received %u/%u\n", bytes_received, expected);
-	// check into -5% to +5%
-	assert(bytes_received >= expected * 0.96 && bytes_received <= expected * 1.04);
+	check_res(th[0], expected);
 
 	close_udp_pair(udp_socks);
 	kill_latency();
