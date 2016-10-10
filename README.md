@@ -21,6 +21,11 @@ Currently requires root privileges as use tun/tap.
     The default is `61234`.
   * `--cap-file` *filename*:
     specify a file name to write captured packets (in tcpdump/pcap format).
+  * `--framing-bytes` *bytes*:
+    specify how many bytes taking into account for framing IP packets.
+    On a real network IP packets are encapsulated in some physical layer so
+    take this layer into account. The default for this setting is 14 which is
+    the usual Ethernet encapsulation.
   * `--help`:
     show usage help.
 

@@ -111,7 +111,7 @@ test_bandwidth(unsigned bw)
 	unsigned expected = 1024 * 1024 * bw / 8 / 10 + 1 * (1024 + MIN_IP_UDP_HEADER);
 
 	// launch program with given latency
-	launch_latency("10 %uMbit", bw);
+	launch_latency("10 %uMbit --framing-bytes 0", bw);
 	create_udp_pair(udp_socks);
 
 	// one direction

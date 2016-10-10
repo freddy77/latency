@@ -35,6 +35,10 @@ static bool remote_connected = false;
 static bool is_server = false;
 static pcap_file *pcap = NULL;
 
+/* bytes for taking into account framing.
+ * 14 is the usual Ethernet framing */
+unsigned framing_bytes = 14;
+
 const char *tun_log_filename = NULL;
 
 /* Fake packets are used to send commands.
@@ -533,6 +537,7 @@ handle_tun(void)
 		if (len < 0)
 			break;
 		pkt->len = len;
+		len += framing_bytes;
 
 		if (pkt->dest_tun == tun_fd_back)
 			log_write_ip(pkt->data, pkt->len);

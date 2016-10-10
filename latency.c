@@ -64,9 +64,10 @@ usage(bool error)
 		"\tlatency --server [OPTION]...\n"
 		"\n"
 		"Options:\n"
-		"  -h, --help      Show this help\n"
-		"  --port <PORT>   Specify port to use (default 61234)\n"
-		"  --cap-file <FN> Specify a capture file\n"
+		"  -h, --help               Show this help\n"
+		"  --port <PORT>            Specify port to use (default 61234)\n"
+		"  --cap-file <FN>          Specify a capture file\n"
+		"  --framing-bytes <BYTES>  Specify physical framing bytes\n"
 		);
 	exit(error ? EXIT_FAILURE : EXIT_SUCCESS);
 }
@@ -117,12 +118,14 @@ main(int argc, char **argv)
 	}
 
 	enum { MODE_local, MODE_server, MODE_client } mode = MODE_local;
-	enum { ARG_port = 256, ARG_client, ARG_server, ARG_capfile };
+	enum { ARG_port = 256, ARG_client, ARG_server, ARG_capfile,
+	       ARG_framingbytes };
 	static struct option long_options[] = {
 		{"client",  required_argument, 0,  ARG_client },
 		{"server",  no_argument,       0,  ARG_server },
 		{"port",    required_argument, 0,  ARG_port },
 		{"cap-file",required_argument, 0,  ARG_capfile },
+		{"framing-bytes",required_argument, 0,  ARG_framingbytes },
 		{"help",    no_argument,       0,  'h' },
 		{0,         0,                 0,  0 }
 	};
@@ -150,6 +153,9 @@ main(int argc, char **argv)
 			break;
 		case ARG_capfile:
 			tun_log_filename = optarg;
+			break;
+		case ARG_framingbytes:
+			framing_bytes = parse_value(optarg, 0, 1000, no_units);
 			break;
 		default:
 			usage(true);
