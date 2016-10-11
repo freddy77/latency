@@ -1,4 +1,4 @@
-AC_INIT([latency], [1.0], [freddy77@gmail.com])
+AC_INIT([latency], [1.1], [freddy77@gmail.com])
 AM_INIT_AUTOMAKE([serial-tests -Wall -Werror foreign])
 AC_PROG_CC
 AM_PROG_AR
