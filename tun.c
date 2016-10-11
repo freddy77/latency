@@ -580,7 +580,7 @@ handle_tun(void)
 			/* reduce values avoiding possible overflows and
 			 * increasing precision (due to floating point
 			 * numbers) */
-			while (curr_time >= flow->first_received_at + 1000000u && flow->bytes_from_first_read >= rate_bytes) {
+			while (curr_time >= flow->first_received_at + 1000000u && flow->bytes_from_first_read > rate_bytes) {
 				flow->first_received_at += 1000000u;
 				flow->bytes_from_first_read -= rate_bytes;
 			}
