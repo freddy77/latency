@@ -12,6 +12,7 @@
 
 static unsigned current_bw = 0;
 static int udp_socks[2] = { -1, -1 };
+static bool remote = false;
 
 typedef struct {
 	uint8_t data[1024];
@@ -111,7 +112,10 @@ test_bandwidth(unsigned bw)
 	unsigned expected = 1024 * 1024 * bw / 8 / 10 + 1 * (1024 + MIN_IP_UDP_HEADER);
 
 	// launch program with given latency
-	launch_latency("10 %uMbit --framing-bytes 0", bw);
+	if (remote)
+		launch_latency_remote("10 %uMbit --framing-bytes 0", bw);
+	else
+		launch_latency("10 %uMbit --framing-bytes 0", bw);
 	create_udp_pair(udp_socks);
 
 	// one direction
@@ -139,13 +143,22 @@ test_bandwidth(unsigned bw)
 	kill_latency();
 }
 
-int main(void)
+static void
+all_tests(void)
 {
-	printf("Testing bandwidth limitation\n");
-
 	test_bandwidth(2);
 	test_bandwidth(4);
 	test_bandwidth(8);
 	test_bandwidth(16);
+}
+
+int main(void)
+{
+	printf("Testing bandwidth limitation\n");
+
+	all_tests();
+	remote = true;
+	all_tests();
+
 	return 0;
 }

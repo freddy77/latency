@@ -6,6 +6,7 @@
 static unsigned test_num = 0;
 static int udp_socks[2] = { -1, -1 };
 static const char payload_id[8] = "DELAY\0\0";
+static bool remote = false;
 
 typedef struct {
 	char id[8];
@@ -43,7 +44,10 @@ test_latency(unsigned latency)
 {
 	++test_num;
 	// launch program with given latency
-	launch_latency("%u 100M", latency);
+	if (remote)
+		launch_latency_remote("%u 100M", latency);
+	else
+		launch_latency("%u 100M", latency);
 	create_udp_pair(udp_socks);
 
 	// send some payload and wait
@@ -79,13 +83,22 @@ test_latency(unsigned latency)
 	kill_latency();
 }
 
-int main(void)
+static void
+all_tests(void)
 {
-	printf("Testing delay introduced is correct\n");
-
 	test_latency(10);
 	test_latency(100);
 	test_latency(200);
 	test_latency(280);
+}
+
+int main(void)
+{
+	printf("Testing delay introduced is correct\n");
+
+	all_tests();
+	remote = true;
+	all_tests();
+
 	return 0;
 }

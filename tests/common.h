@@ -1,4 +1,5 @@
 #undef NDEBUG
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -14,6 +15,9 @@ bool latency_running(void);
 
 /** launch a program with given parameters */
 void launch_latency(const char *fmt, ...);
+
+/** launch a program with given parameters */
+void launch_latency_remote(const char *fmt, ...);
 
 /** kill latency process */
 void kill_latency(void);

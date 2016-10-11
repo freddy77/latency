@@ -8,5 +8,9 @@ int main(void)
 	launch_latency("10 100M");
 	assert(system("ping -c1 192.168.127.1") == 0);
 	kill_latency();
+
+	launch_latency_remote("10 100M");
+	assert(system("ping -c1 192.168.127.1") == 0);
+	kill_latency();
 	return 0;
 }
