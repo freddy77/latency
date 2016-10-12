@@ -47,7 +47,7 @@ All numbers can be decimal, for instance:
 
 
 ```bash
-$ latency 10ms 2.3M
+# latency 10ms 2.3M
 ```
 
 ## USAGE
@@ -58,14 +58,14 @@ the local machine with the connection modified as specified.
 To use the client/server launch the server first with
 
 ```bash
-$ latency --server
+# latency --server
 ```
 
 (you can optionally specify a port). Then on the client machine
 you can launch
 
 ```bash
-$ latency 10ms 2.3M --client 192.168.0.11
+# latency 10ms 2.3M --client 192.168.0.11
 ```
 
 (where `192.168.0.11` is the address of the server). The client
