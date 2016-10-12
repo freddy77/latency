@@ -9,10 +9,10 @@ or
 
 ## DESCRIPTION
 
-This project provide an utility to help testing environments
+This project provides an utility to help testing environments
 with high latency and low bandwidth.
 
-Currently requires root privileges as use tun/tap.
+Currently requires root privileges as uses tun/tap.
 
 ## OPTIONS
 
@@ -70,11 +70,11 @@ $ latency 10ms 2.3M --client 192.168.0.11
 
 (where `192.168.0.11` is the address of the server). The client
 will send latency/bandwidth to server at the beginning so launching
-the client where is frequent to change latency/bandwidth make this
+the client where is frequent to change latency/bandwidth makes this
 change easier (currently you have to stop the client and open with
 new options).
 
-The client/server use UDP protocol. The server will bind to the UDP
+The client/server uses UDP protocol. The server will bind to the UDP
 port specified while the client will send packets to this port. If
 something is not working check your firewall for this port/protocol.
 
@@ -115,7 +115,7 @@ bandwidth control but this could not reproduce some issues due to
 acks latency and didn't allows the programs to check the network
 queues (as emptied by the proxy).
 
-I knowed a solution would be to use tun/tap but I didn't like the
+I knew a solution would be to use tun/tap but I didn't like the
 idea of having to be root but the limitations were too high and I
 came to use tun/tap with a SUID executable.
 
