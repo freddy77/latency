@@ -94,7 +94,7 @@ launch_latency_client(bool local, const char *fmt, va_list ap)
 		exit(1);
 	}
 
-	int count;
+	int count = 0;
 	while (!latency_running()) {
 		usleep(2000);
 		assert(++count < 100);
