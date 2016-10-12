@@ -26,3 +26,5 @@ bandwidth_LDFLAGS = -pthread
 
 check_PROGRAMS += ping
 ping_SOURCES = ping.c
+
+EXTRA_DIST = test_closure
