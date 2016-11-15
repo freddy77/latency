@@ -14,6 +14,7 @@
 #include <limits.h>
 #include <getopt.h>
 #include <stdbool.h>
+#include <err.h>
 #include <sys/wait.h>
 #include <arpa/inet.h>
 
@@ -111,10 +112,8 @@ main(int argc, char **argv)
 		setenv("HOME", "/root", 1);
 		setenv("PATH", "/sbin:/bin:/usr/sbin:/usr/bin", 1);
 		setenv("SHELL", "/bin/sh", 1);
-		if (setuid(0)) {
-			perror("setuid");
-			exit(EXIT_FAILURE);
-		}
+		if (setuid(0))
+			err(EXIT_FAILURE, "setuid");
 	}
 
 	enum { MODE_local, MODE_server, MODE_client } mode = MODE_local;
@@ -165,10 +164,8 @@ main(int argc, char **argv)
 	tun_setup(mode == MODE_local);
 
 	if (ruid != euid) {
-		if (setuid(ruid)) {
-			perror("setuid");
-			exit(EXIT_FAILURE);
-		}
+		if (setuid(ruid))
+			err(EXIT_FAILURE, "setuid");
 	}
 
 	int port = parse_value(str_port, 1, 65535, no_units);

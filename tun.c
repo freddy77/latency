@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <poll.h>
 #include <errno.h>
+#include <err.h>
 #include <stdbool.h>
 #include <sys/socket.h>
 #include <linux/if.h>
@@ -100,22 +101,16 @@ tun_init(const char *ip)
 
 	tun_name[0] = 0;
 	fd = tun_alloc(tun_name, IFF_TUN|IFF_NO_PI);
-	if (fd < 0) {
-		perror("error creating TUN device");
-		exit(EXIT_FAILURE);
-	}
+	if (fd < 0)
+		err(EXIT_FAILURE, "error creating TUN device");
 
 	sprintf(cmd, "ip link set %s up", tun_name);
-	if (system(cmd) != 0) {
-		perror("system");
-		exit(EXIT_FAILURE);
-	}
+	if (system(cmd) != 0)
+		err(EXIT_FAILURE, "system");
 
 	sprintf(cmd, "ip addr add %s dev %s", ip, tun_name);
-	if (system(cmd) != 0) {
-		perror("system");
-		exit(EXIT_FAILURE);
-	}
+	if (system(cmd) != 0)
+		err(EXIT_FAILURE, "system");
 
 	return fd;
 }
@@ -141,10 +136,8 @@ create_remote_socket(void)
 	}
 
 	remote_sock = socket(AF_INET, SOCK_DGRAM, 0);
-	if (remote_sock < 0) {
-		perror("socket");
-		exit(EXIT_FAILURE);
-	}
+	if (remote_sock < 0)
+		err(EXIT_FAILURE, "socket");
 }
 
 void
@@ -198,10 +191,8 @@ tun_set_server(int port)
 	sin.sin_port = htons((short) port);
 	sin.sin_addr.s_addr = INADDR_ANY;
 
-	if (bind(remote_sock, (struct sockaddr *) &sin, sizeof(sin)) < 0) {
-		perror("bind");
-		exit(EXIT_FAILURE);
-	}
+	if (bind(remote_sock, (struct sockaddr *) &sin, sizeof(sin)) < 0)
+		err(EXIT_FAILURE, "bind");
 	remote_connected = false;
 	is_server = true;
 }
@@ -532,10 +523,8 @@ handle_tun(void)
 
 	if (tun_log_filename) {
 		pcap = pcap_open(tun_log_filename);
-		if (!pcap) {
-			perror("error opening log file");
-			exit(EXIT_FAILURE);
-		}
+		if (!pcap)
+			err(EXIT_FAILURE, "error opening log file");
 	}
 
 	if (remote_sock >= 0)

@@ -3,6 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <err.h>
 #include <sys/ioctl.h>
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
@@ -13,20 +14,16 @@ void
 set_nonblocking(int sock)
 {
 	int on = 1;
-	if (ioctl(sock, FIONBIO, &on) == -1) {
-		perror("ioctl");
-		exit(EXIT_FAILURE);
-	}
+	if (ioctl(sock, FIONBIO, &on) == -1)
+		err(EXIT_FAILURE, "ioctl");
 }
 
 void
 set_nodelay(int fd)
 {
 	int nodelay = 1;
-	if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay)) == -1) {
-		perror("ioctl");
-		exit(EXIT_FAILURE);
-	}
+	if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay)) == -1)
+		err(EXIT_FAILURE, "ioctl");
 }
 
 void
