@@ -14,6 +14,7 @@
 #include <limits.h>
 #include <getopt.h>
 #include <stdbool.h>
+#include <signal.h>
 #include <err.h>
 #include <sys/wait.h>
 #include <arpa/inet.h>

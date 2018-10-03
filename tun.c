@@ -16,6 +16,7 @@
 #include <fcntl.h>
 #include <arpa/inet.h>
 #include <netinet/ip.h>
+#include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
 #include <pthread.h>
@@ -57,7 +58,7 @@ enum {
 };
 
 typedef struct {
-	struct iphdr iphdr;
+	struct ip iphdr;
 	uint32_t fields[4];
 } fake_ip_packet;
 
@@ -170,7 +171,7 @@ tun_set_client(const char *ip, int port)
 	pkt.fields[FAKE_FIELD_latency_us] = htonl(latency_us);
 	pkt.fields[FAKE_FIELD_rate_bytes] = htonl(rate_bytes);
 	sendto(remote_sock, &pkt, sizeof(pkt), MSG_NOSIGNAL,
-	       &remote_addr, sizeof(remote_addr));
+	       (struct sockaddr*) &remote_addr, sizeof(remote_addr));
 
 	remote_connected = true;
 }
@@ -278,7 +279,7 @@ handle_fake_packet(const uint8_t *data, size_t len)
 	const fake_ip_packet *pkt = (const fake_ip_packet *) data;
 
 	/* a fake packet has these 3 fields set to zeroes */
-	if (pkt->iphdr.check || pkt->iphdr.saddr || pkt->iphdr.daddr)
+	if (pkt->iphdr.ip_sum || pkt->iphdr.ip_src.s_addr || pkt->iphdr.ip_dst.s_addr)
 		return false;
 
 	const uint32_t *fields = pkt->fields;
@@ -308,12 +309,12 @@ handle_remote_flow(void *param)
 			 * be able to send packet back */
 			socklen_t sock_len = sizeof(remote_addr);
 			len = recvfrom(remote_sock, pkt->data, MIN_PKT_LEN, 0,
-				       &remote_addr, &sock_len);
+				       (struct sockaddr*) &remote_addr, &sock_len);
 		}
 		if (len <= 0)
 			break;
 		remote_connected = true;
-		if (len < sizeof(struct iphdr))
+		if (len < sizeof(struct ip))
 			continue;
 		if (!handle_fake_packet(pkt->data, len)) {
 			log_write_ip(pkt->data, pkt->len);
@@ -346,43 +347,43 @@ cksum(const void *pkt, size_t len, unsigned int start)
 }
 
 static void
-nat_addresses(struct iphdr *ip)
+nat_addresses(struct ip *ip)
 {
-	u_int32_t saddr = ip->saddr;
+	u_int32_t saddr = ip->ip_src.s_addr;
 	if (remote_sock >= 0) {
 		/* swap source and destination IPs to forward the packet
 		 * coming from the real machine back to the machine again */
-		ip->saddr = ip->daddr;
-		ip->daddr = saddr;
+		ip->ip_src = ip->ip_dst;
+		ip->ip_dst.s_addr = saddr;
 		return;
 	}
 
 	/* we must do some more work for local case */
-	unsigned pre = cksum(&ip->saddr, 8, 0); // 2 IPs
+	unsigned pre = cksum(&ip->ip_src, 8, 0); // 2 IPs
 
 	if (saddr == htonl(IP(192,168,127,0))) {
 		// going 127.0 -> 127.1
-		ip->saddr = htonl(IP(192,168,127,3));
-		ip->daddr = htonl(IP(192,168,127,2));
+		ip->ip_src.s_addr = htonl(IP(192,168,127,3));
+		ip->ip_dst.s_addr = htonl(IP(192,168,127,2));
 	} else {
 		// back 127.2 -> 127.3
-		ip->saddr = htonl(IP(192,168,127,1));
-		ip->daddr = htonl(IP(192,168,127,0));
+		ip->ip_src.s_addr = htonl(IP(192,168,127,1));
+		ip->ip_dst.s_addr = htonl(IP(192,168,127,0));
 	}
 
 	// adjust checksums for IP, TCP, UDP and UDP-LITE
-	unsigned adjust_cksum = reduce_cksum(pre + 0xffffu - cksum(&ip->saddr, 8, 0));
-	ip->check = reduce_cksum(ip->check + adjust_cksum);
-	if (ip->protocol == IPPROTO_TCP) {
+	unsigned adjust_cksum = reduce_cksum(pre + 0xffffu - cksum(&ip->ip_src, 8, 0));
+	ip->ip_sum = reduce_cksum(ip->ip_sum + adjust_cksum);
+	if (ip->ip_p == IPPROTO_TCP) {
 		uint8_t *data = (uint8_t *) ip;
-		struct tcphdr *tcp = (struct tcphdr *) &data[ip->ihl*4];
-		tcp->check = reduce_cksum(tcp->check + adjust_cksum);
+		struct tcphdr *tcp = (struct tcphdr *) &data[ip->ip_hl*4];
+		tcp->th_sum = reduce_cksum(tcp->th_sum + adjust_cksum);
 	}
-	if (ip->protocol == IPPROTO_UDP || ip->protocol == IPPROTO_UDPLITE) {
+	if (ip->ip_p == IPPROTO_UDP || ip->ip_p == IPPROTO_UDPLITE) {
 		uint8_t *data = (uint8_t *) ip;
-		struct udphdr *udp = (struct udphdr *) &data[ip->ihl*4];
-		if (udp->check) {
-			udp->check = reduce_cksum(udp->check + adjust_cksum);
+		struct udphdr *udp = (struct udphdr *) &data[ip->ip_hl*4];
+		if (udp->uh_sum) {
+			udp->uh_sum = reduce_cksum(udp->uh_sum + adjust_cksum);
 		}
 	}
 }
@@ -401,7 +402,7 @@ compute_polling_timeout(flow_info *flow, struct pollfd *poll_fd, struct timespec
 		if (remote_sock >= 0) {
 			if (remote_connected)
 				sendto(remote_sock, pkt->data, pkt->len, MSG_NOSIGNAL,
-				       &remote_addr, sizeof(remote_addr));
+				       (struct sockaddr*) &remote_addr, sizeof(remote_addr));
 		} else {
 			if (flow->dest_fd == tun_fd)
 				log_write_ip(pkt->data, pkt->len);
@@ -473,8 +474,8 @@ handle_tun_flow(void *param)
 		if (from_fd == tun_fd)
 			log_write_ip(pkt->data, pkt->len);
 
-		struct iphdr *ip = (struct iphdr *) pkt->data;
-		if (ip->version != IPVERSION)
+		struct ip *ip = (struct ip *) pkt->data;
+		if (ip->ip_v != IPVERSION)
 			continue;
 
 		uint64_t curr_time = get_time_us();
