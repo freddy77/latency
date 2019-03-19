@@ -8,6 +8,8 @@ License:	GPLv2
 URL:		https://github.com/freddy77/latency
 Source0:	latency-%{version}.tar.gz
 
+BuildRequires:  %{__cc}
+
 %description
 This project provide an utility to help testing environments with high
 latency and low bandwidth.
