@@ -1,4 +1,5 @@
 #define _GNU_SOURCE
+#include <config.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,6 +29,20 @@
 #include "latency.h"
 #include "utils.h"
 #include "pcap.h"
+
+#ifndef HAVE_STRUCT_TCPHDR_TH_SUM
+#ifndef HAVE_STRUCT_TCPHDR_CHECK
+#error No checksum field found in tcphdr
+#endif
+#define th_sum check
+#endif
+
+#ifndef HAVE_STRUCT_UDPHDR_UH_SUM
+#ifndef HAVE_STRUCT_UDPHDR_CHECK
+#error No checksum field found in udphdr
+#endif
+#define uh_sum check
+#endif
 
 static int tun_fd = -1;
 static int tun_fd_back = -1;
