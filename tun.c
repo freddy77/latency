@@ -238,9 +238,7 @@ enum { PKT_DEBUG_ENABLED = 0 };
 static packet_t *
 alloc_packet(void)
 {
-	packet_t *pkt = malloc(sizeof(packet_t) + MIN_PKT_LEN);
-	memset(pkt, 0, sizeof(*pkt));
-	return pkt;
+	return (packet_t *) calloc(1, sizeof(packet_t) + MIN_PKT_LEN);
 }
 
 /* add packet to list */
