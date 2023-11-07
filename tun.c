@@ -23,7 +23,6 @@
 #include <pthread.h>
 #include <sys/time.h>
 #include <sys/resource.h>
-#include <assert.h>
 
 #include "tun.h"
 #include "latency.h"
@@ -355,7 +354,6 @@ cksum(const void *pkt, size_t len, unsigned int start)
 		sum += ntohs(*((const uint8_t *)data) << 8);
 	sum = reduce_cksum(sum);
 	sum = reduce_cksum(sum);
-	assert(sum < 0x10000u);
 	return sum;
 }
 
