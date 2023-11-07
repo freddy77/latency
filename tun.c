@@ -43,6 +43,12 @@
 #define uh_sum check
 #endif
 
+#if defined(__GNUC__)
+#  define MAY_ALIAS __attribute__((__may_alias__))
+#else
+#  define MAY_ALIAS
+#endif
+
 static int tun_fd = -1;
 static int tun_fd_back = -1;
 static int remote_sock = -1;
@@ -345,13 +351,14 @@ reduce_cksum(unsigned sum)
 static unsigned
 cksum(const void *pkt, size_t len, unsigned int start)
 {
-	const uint16_t *data = (const uint16_t *) pkt;
+	typedef union MAY_ALIAS { uint16_t full; uint8_t part; } u16;
+	const u16 *data = (const u16 *) pkt;
 	unsigned sum = start;
 
-	for (; len >= 2; len -= 2)
-		sum += *data++;
+	for (; len >= 2; len -= 2, ++data)
+		sum += data->full;
 	if (len)
-		sum += ntohs(*((const uint8_t *)data) << 8);
+		sum += ntohs(data->part << 8);
 	sum = reduce_cksum(sum);
 	sum = reduce_cksum(sum);
 	return sum;
