@@ -58,8 +58,8 @@ static bool is_server = false;
 static pcap_file *pcap = NULL;
 
 /* bytes for taking into account framing.
- * 14 is the usual Ethernet framing */
-unsigned framing_bytes = 14;
+ * 14 is the usual Ethernet framing, 4 CRC */
+unsigned framing_bytes = 14 + 4;
 
 const char *tun_log_filename = NULL;
 
